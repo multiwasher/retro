@@ -1306,6 +1306,7 @@ function setPower(kind) {
   if (py > GROUND - ph()) py = GROUND - ph();
 }
 let shots = [], fireCd = 0;
+let boss = null, bossShots = [], bossesDone = 0;
 let wheelA = 0, shakeT = 0, flashT = 0, crashed = false;
 let obs = [], picks = [], parts = [], floats = [], pits = [];
 let obsGap = 0, pickGap = 600, powerGap = 2200;
@@ -1699,6 +1700,7 @@ function resetGame() {
   speed = BASE_SPEED; elapsed = 0;
   pxx = 180; py = GROUND - PH; vy = 0; onGround = true; jumps = 0;
   power = null; invT = 0; shots = []; fireCd = 0; pits = [];
+  boss = null; bossShots = []; bossesDone = 0;
   pitHit = false; inPitDrop = false;
   flys = []; flyGap = 2400;
   obsGap = 500; pickGap = 700; powerGap = 1600;
@@ -1838,6 +1840,136 @@ function crash() {
   setTimeout(() => endGame(), 900);
 }
 
+/* ---------- CHEFE DE NÍVEL (SUJÃO) ---------- */
+function bossName(lv) { return ['REI DA GORDURA', 'MONSTRO DA MASSA', 'GERME-MOR'][lv] || 'SUJAO-CHEFE'; }
+function bossPal(lv) {
+  return [
+    { body: '#7a4636', bodyL: '#9a5e46', bodyD: '#552f24' },
+    { body: '#8a6a3c', bodyL: '#a5854f', bodyD: '#5f4a29' },
+    { body: '#5f7a4a', bodyL: '#7a9a5f', bodyD: '#405233' },
+  ][lv] || { body: '#6b5230', bodyL: '#8a6c40', bodyD: '#4a3820' };
+}
+function startBoss() {
+  const lv = bossesDone;
+  boss = { lv, hpMax: 16 + lv * 6, hp: 16 + lv * 6, x: W + 140, y: GROUND - 150,
+           w: 150, h: 150, t: 0, bob: 0, atkT: 1.6, hitT: 0, state: 'enter', dieT: 0 };
+  bossShots = []; obs = []; pits = []; flys = [];
+  banner = { txt: 'CHEFE!', sub: bossName(lv), t: 2.0 };
+  sfx.level();
+}
+function makeGlob(x, y, tx) {
+  const flight = 0.95;
+  return { x, y, vx: (tx - x) / flight, vy: -430, r: 13 };
+}
+function playerHit() {
+  if (invT > 0 || crashed) return;
+  if (power) {
+    const lost = power; setPower(null); invT = 1.6; sfx.pop(); shakeT = 0.5;
+    foamBurst(pxx + pw() / 2, py + ph() / 2);
+    const nome = lost === 'foam' ? 'ESCUDO PERDIDO!' : lost === 'shot' ? 'JATO PERDIDO!' : 'ENCOLHEU!';
+    floats.push({ x: pxx + pw() / 2, y: py - 24, txt: nome, col: C.red, life: 1.1 });
+  } else {
+    lives--;
+    if (lives <= 0) crash();
+    else { invT = 1.6; sfx.pop(); shakeT = 0.5; spawnParts(pxx + pw() / 2, py + ph() / 2, 12, C.red, 180); floats.push({ x: pxx + pw() / 2, y: py - 24, txt: '-1 VIDA', col: C.red, life: 1.1 }); }
+  }
+}
+function hitBoss() {
+  if (!boss || boss.state !== 'fight') return;
+  boss.hp--; boss.hitT = 0.12; sfx.boom();
+  spawnParts(boss.x - boss.w / 4, boss.y + boss.bob, 8, C.led, 180);
+  foamBurst(boss.x - boss.w / 4, boss.y + boss.bob);
+  if (boss.hp <= 0) { boss.state = 'dying'; boss.dieT = 1.5; sfx.wash(); shakeT = 0.6; flashT = 0.12; }
+}
+function defeatBoss() {
+  const lv = boss.lv, bonus = 1000 * (lv + 1);
+  score += bonus; washed++;
+  boss = null; bossShots = []; bossesDone++;
+  dist = bossesDone * LEVEL_M * 10 + 5;
+  flashT = 0.16; sfx.level();
+  if (bossesDone >= 3) {
+    bonusGiven = true; lvlIdx = 2; LV = LEVELS[2];
+    banner = { txt: 'TURNO COMPLETO!', sub: 'SUJAO-MOR LAVADO · +' + bonus, t: 3.0 };
+  } else {
+    lvlIdx = bossesDone; LV = LEVELS[lvlIdx];
+    banner = { txt: 'ZONA LIMPA! NIVEL ' + (lvlIdx + 1), sub: LV.name + ' · +' + bonus, t: 2.8 };
+  }
+}
+function updateBoss(dt) {
+  const bo = boss;
+  bo.t += dt; bo.bob = Math.sin(bo.t * 2) * 20;
+  if (bo.hitT > 0) bo.hitT -= dt;
+  if (bo.state === 'enter') {
+    bo.x -= 300 * dt;
+    if (bo.x <= 690) { bo.x = 690; bo.state = 'fight'; }
+  } else if (bo.state === 'fight') {
+    bo.atkT -= dt;
+    if (bo.atkT <= 0) {
+      bo.atkT = Math.max(0.85, 1.8 - bo.lv * 0.28);
+      const n = 1 + (bo.lv >= 1 ? 1 : 0) + (bo.lv >= 2 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const tx = Math.max(40, Math.min(720, pxx + pw() / 2 + (i - (n - 1) / 2) * 150));
+        bossShots.push(makeGlob(bo.x - bo.w / 3, bo.y + bo.bob, tx));
+      }
+      sfx.shot();
+    }
+  } else if (bo.state === 'dying') {
+    bo.dieT -= dt; bo.y -= 40 * dt;
+    if (Math.random() < 0.7) foamBurst(bo.x + (Math.random() - 0.5) * bo.w, bo.y + bo.bob + (Math.random() - 0.5) * bo.h);
+    if (bo.dieT <= 0) defeatBoss();
+    return;
+  }
+  if (invT <= 0 && !crashed) {
+    const bx = bo.x - bo.w / 2, by = bo.y + bo.bob - bo.h / 2;
+    const p0x = pxx + pw() * 0.14, p0w = pw() * 0.72, p0y = py + ph() * 0.1, p0h = ph() * 0.88;
+    if (p0x < bx + bo.w && p0x + p0w > bx && p0y < by + bo.h && p0y + p0h > by) playerHit();
+  }
+  for (const g of [...bossShots]) {
+    g.vy += 1450 * dt; g.x += g.vx * dt; g.y += g.vy * dt;
+    if (g.y > GROUND - 4) { spawnParts(g.x, GROUND, 7, bossPal(bo.lv).body, 150); bossShots.splice(bossShots.indexOf(g), 1); continue; }
+    if (g.x < -40 || g.x > W + 60) { bossShots.splice(bossShots.indexOf(g), 1); continue; }
+    if (invT <= 0 && !crashed) {
+      const p0x = pxx + pw() * 0.2, p0w = pw() * 0.6, p0y = py + ph() * 0.15, p0h = ph() * 0.8;
+      if (g.x > p0x && g.x < p0x + p0w && g.y > p0y && g.y < p0y + p0h) { bossShots.splice(bossShots.indexOf(g), 1); playerHit(); }
+    }
+  }
+}
+function drawBoss() {
+  const bo = boss, pal = bossPal(bo.lv);
+  const flash = bo.hitT > 0 && Math.sin(elapsed * 60) > 0;
+  for (const g of bossShots) {
+    px(g.x - g.r, g.y - g.r, g.r * 2, g.r * 2, C.ink);
+    px(g.x - g.r + 2, g.y - g.r + 2, g.r * 2 - 4, g.r * 2 - 4, pal.body);
+    px(g.x - g.r + 2, g.y - g.r + 2, g.r * 2 - 4, 4, pal.bodyL);
+  }
+  cx.save();
+  cx.translate(bo.x, bo.y + bo.bob);
+  const ds = bo.state === 'dying' ? Math.max(0.2, bo.dieT / 1.5) : 1;
+  cx.scale(ds, ds);
+  const w = bo.w, h = bo.h;
+  cx.fillStyle = C.ink; cx.beginPath(); cx.arc(0, 0, w / 2 + 4, 0, 7); cx.fill();
+  cx.fillStyle = flash ? '#ffffff' : pal.body; cx.beginPath(); cx.arc(0, 0, w / 2, 0, 7); cx.fill();
+  cx.fillStyle = flash ? '#ffffff' : pal.bodyL; cx.beginPath(); cx.arc(-w * 0.12, -h * 0.14, w * 0.3, 0, 7); cx.fill();
+  cx.fillStyle = flash ? '#ffffff' : pal.bodyD;
+  for (let i = -2; i <= 2; i++) { cx.beginPath(); cx.arc(i * w * 0.18, h * 0.42, 8 + (i % 2 ? 3 : 6), 0, 7); cx.fill(); }
+  if (bo.lv >= 2) { cx.fillStyle = flash ? '#fff' : pal.bodyD; for (let a = 0; a < 8; a++) { cx.save(); cx.rotate(a / 8 * Math.PI * 2); cx.fillRect(w * 0.44, -6, 20, 12); cx.restore(); } }
+  for (const sgn of [-1, 1]) { px(sgn * w * 0.16 - 15, -h * 0.06 - 15, 30, 32, C.white); px(sgn * w * 0.16 - 6, -h * 0.06 + 2, 14, 16, C.ink); }
+  px(-w * 0.34, -h * 0.24, w * 0.26, 7, C.ink);
+  px(w * 0.08, -h * 0.24, w * 0.26, 7, C.ink);
+  px(-w * 0.2, h * 0.16, w * 0.4, 8, C.ink);
+  for (let i = 0; i < 4; i++) px(-w * 0.16 + i * w * 0.1, h * 0.16, 6, 10, C.ink);
+  cx.restore();
+  if (bo.state !== 'dying') {
+    const bw = 300, bx = W / 2 - bw / 2, byy = 70;
+    text('CHEFE · ' + bossName(bo.lv), W / 2, 60, 15, C.yellow, 'center');
+    px(bx - 3, byy - 3, bw + 6, 20, C.ink);
+    px(bx, byy, bw, 14, '#3a2020');
+    const f = Math.max(0, bo.hp / bo.hpMax);
+    px(bx, byy, bw * f, 14, f > 0.4 ? C.red : C.orange);
+    px(bx, byy, bw * f, 4, 'rgba(255,255,255,0.4)');
+  }
+}
+
 function checkLevel() {
   const m = dist / 10;
   const li = Math.max(0, Math.min(2, Math.floor(m / LEVEL_M)));
@@ -1862,9 +1994,13 @@ function updatePlay(dt) {
   if (crashed) { elapsed += dt; updateParts(dt); return; }
   elapsed += dt;
   speed = BASE_SPEED + Math.min(330, elapsed * 9) + lvlIdx * 40;
-  dist += speed * dt;
-  score += speed * dt * 0.02;
-  checkLevel();
+  if (!boss) {
+    dist += speed * dt;
+    score += speed * dt * 0.02;
+    checkLevel();
+    const mNow = dist / 10;
+    if (bossesDone < 3 && mNow >= (bossesDone + 1) * LEVEL_M - 300) startBoss();
+  }
 
   // movimento horizontal
   const mvx = ((heldR || padR) ? 1 : 0) - ((heldL || padL) ? 1 : 0);
@@ -1874,8 +2010,8 @@ function updatePlay(dt) {
 
   // disparo (jato de pressão)
   fireCd -= dt;
-  const wantFire = ev.fire || (touchMode && power === 'shot');
-  if (power === 'shot' && wantFire && fireCd <= 0) {
+  const wantFire = ev.fire || (touchMode && (power === 'shot' || boss));
+  if ((power === 'shot' || boss) && wantFire && fireCd <= 0) {
     shots.push({ x: pxx + pw() + 8, y: py + ph() / 2 });
     fireCd = 0.32;
     sfx.shot();
@@ -1884,7 +2020,8 @@ function updatePlay(dt) {
 
   physics(dt, held || padHeld);
   scroll(dt);
-  spawnStuff(dt);
+  if (boss) updateBoss(dt);
+  else spawnStuff(dt);
 
   for (const o of [...obs]) {
     o.x -= speed * dt;
@@ -1904,6 +2041,12 @@ function updatePlay(dt) {
   for (const s of [...shots]) {
     s.x += (speed + 620) * dt;
     if (s.x > W + 40) { shots.splice(shots.indexOf(s), 1); continue; }
+    if (boss && boss.state === 'fight') {
+      const bx = boss.x - boss.w / 2, by = boss.y + boss.bob - boss.h / 2;
+      if (s.x > bx && s.x < bx + boss.w && s.y > by && s.y < by + boss.h) {
+        shots.splice(shots.indexOf(s), 1); hitBoss(); continue;
+      }
+    }
     let spent = false;
     for (const f of [...flys]) {
       const fy = flyY(f);
@@ -2147,6 +2290,7 @@ function drawWorld() {
     px(s.x - 16, s.y - 3, 18, 6, C.led);
     px(s.x - 2, s.y - 2, 8, 4, '#bdf1fb');
   }
+  if (boss) drawBoss();
   if (!crashed || Math.sin(elapsed * 30) > 0) drawRunner();
   for (const q of parts) {
     cx.globalAlpha = Math.min(1, q.life * 2);
@@ -3863,7 +4007,7 @@ function updateAttract(dt) {
   lives = 3;
   if (enemies.length === 0 && clearT <= 0) clearT = 1;
   if (clearT > 0) { clearT -= dt; if (clearT <= 0) { level = 1 + (level % LAYOUTS.length); resetLevel(); } }
-  if (ev.any) startGame();
+  if (ev.any) { heldL = heldR = padL = padR = false; startGame(); }
 }
 
 /* ---------- sprites ---------- */
