@@ -6508,7 +6508,7 @@ let state = ST.ATTRACT;
 let px2 = 0;                          // posição lateral do jogador [-1.15..1.15]
 let speed = 0.5, turbo = false;
 let curCurve = 0, trackPos = 0, roadScroll = 0;
-let dist = 0, score = 0, washed = 0, lives = 3, invT = 0, offroadT = 0;
+let dist = 0, score = 0, washed = 0, lives = 3, invT = 0, offroadT = 0, offRoadDwell = 0;
 let traffic = [], items = [], scenery = [];
 let trafGap = 0.8, itemGap = 3, scenGap = 0.2;
 let parts = [], floats = [];
@@ -6652,7 +6652,7 @@ function roadCenter(p) {
 function resetGame() {
   px2 = 0; speed = 0.5; turbo = false;
   curCurve = 0; trackPos = 0; roadScroll = 0;
-  dist = 0; score = 0; washed = 0; lives = 3; invT = 0;
+  dist = 0; score = 0; washed = 0; lives = 3; invT = 0; offRoadDwell = 0;
   traffic = []; items = []; scenery = [];
   trafGap = 1.2; itemGap = 2.5; scenGap = 0.1;
   parts = []; floats = [];
@@ -6782,10 +6782,23 @@ function updatePlay(dt) {
 
   // fora de estrada (só na berma extrema, e travagem suave)
   if (Math.abs(px2) > 1.0) {
-    speed = Math.max(0.34, speed - dt * 0.45);
+    speed = Math.max(0.34, speed - dt * 0.6);
     offroadT -= dt;
     if (offroadT <= 0) { sfx.offroad(); offroadT = 0.16; }
-  } else offroadT = 0;
+    offRoadDwell += dt;
+    if (offRoadDwell > 0.35 && invT <= 0) {
+      lives--;
+      sfx.hit();
+      shakeT = 0.6; flashT = 0.15;
+      spawnParts(W / 2, 440, 20, C.red, 260);
+      speed = 0.34;
+      px2 = px2 > 0 ? 0.8 : -0.8;   // empurra de volta à pista
+      offRoadDwell = 0;
+      if (lives <= 0) { gameOver(); return; }
+      invT = 2;
+      floats.push({ x: W / 2, y: 380, txt: '-1 VIDA · FORA DA PISTA', col: C.red, life: 1.3 });
+    }
+  } else { offroadT = 0; offRoadDwell = 0; }
 
   dist += speed * dt * 240;
   score += speed * dt * (turbo ? 26 : 14);
@@ -7073,6 +7086,7 @@ function drawAttract() {
     ? 'SEGURA NOS LADOS = GUIA · CENTRO = TURBO'
     : '◄► GUIA · SEGURA A/B/ESPAÇO = TURBO',
     W / 2, 275, 14, C.steelL, 'center');
+  text('DESVIA DO TRÂNSITO SUJO · NÃO SAIAS DA PISTA!', W / 2, 302, 13, C.orange, 'center');
   text('— TOP 3 DO DIA —', W / 2, 335, 18, C.orange, 'center');
   if (top3.length === 0) {
     text('SÊ O PRIMEIRO!', W / 2, 375, 16, C.steelL, 'center');
