@@ -26,6 +26,28 @@
     text-shadow: 4px 4px 0 #000; letter-spacing: 0.5vmin; margin: 0; }
   .subtitle { font-size: 2.4vmin; color: #8f8f89; margin: 0 0 2vmin; }
   #cards { display: flex; gap: 4vmin; flex-wrap: wrap; justify-content: center; }
+  #burgerBtn {
+    position: fixed; top: 14px; left: 14px; z-index: 20;
+    width: 46px; height: 42px; padding: 0;
+    background: #10141c; color: #35d6f0;
+    border: 2px solid #2c3547; font: bold 24px/1 "Courier New", monospace;
+    cursor: pointer;
+  }
+  #burgerBtn:hover, #burgerBtn:active { border-color: #35d6f0; }
+  #extraMenu {
+    position: fixed; top: 0; left: 0; z-index: 15;
+    display: none; width: min(390px, 92vw); height: 100%; overflow-y: auto;
+    box-sizing: border-box; padding: 76px 18px 24px;
+    background: #07090d; border-right: 4px solid #2c3547;
+    box-shadow: 12px 0 30px rgba(0,0,0,0.55);
+  }
+  #extraMenu.open { display: block; }
+  #extraMenu h2 { margin: 0 0 18px; color: #ffd23f; font-size: 20px; }
+  #extraCards { display: grid; gap: 18px; }
+  #extraCards .card { width: auto; min-width: 0; padding: 12px; }
+  #extraCards .card h2 { margin: 10px 0 6px; font-size: 20px; }
+  #extraCards .card p { font-size: 13px; }
+  #extraCards .card .tag { font-size: 12px; }
   .card {
     width: 34vmin; min-width: 230px;
     background: #10141c;
@@ -71,6 +93,7 @@
 </style>
 </head>
 <body>
+<button id="burgerBtn" aria-label="Abrir menu" aria-expanded="false">☰</button>
 <div id="menu">
   <h1 class="title">MWS ARCADE</h1>
   <p class="subtitle">SOMENGIL · MWS — Multi Washing System</p>
@@ -89,19 +112,26 @@
       <p>3 níveis · presuntos, padaria, farmacêutica</p>
       <span class="tag">ECRÃ HORIZONTAL</span>
     </div>
-    <div class="card" id="card-blocks">
-      <canvas id="pv-blocks" width="200" height="120"></canvas>
-      <h2>MWS BLOCOS</h2>
-      <p>Peças de mini-MWS a empilhar</p>
-      <p>Linha completa = ciclo de lavagem</p>
-      <span class="tag">ECRÃ VERTICAL</span>
-    </div>
     <div class="card" id="card-bubbles">
       <canvas id="pv-bubbles" width="200" height="120"></canvas>
       <h2>MWS BOLHAS</h2>
       <p>Prende os sujões em bolhas de espuma</p>
       <p>Rebenta e lava · plataformas</p>
       <span class="tag">ECRÃ HORIZONTAL</span>
+    </div>
+  </div>
+  <div id="prompt">ESCOLHE O JOGO</div>
+  <div id="hint">◄► escolhe · ✕/ENTER joga<br>no jogo: ESC, SELECT do comando ou botão ◄ MENU para voltar</div>
+</div>
+<aside id="extraMenu" aria-hidden="true">
+  <h2>OUTROS JOGOS</h2>
+  <div id="extraCards">
+    <div class="card" id="card-blocks">
+      <canvas id="pv-blocks" width="200" height="120"></canvas>
+      <h2>MWS BLOCOS</h2>
+      <p>Peças de mini-MWS a empilhar</p>
+      <p>Linha completa = ciclo de lavagem</p>
+      <span class="tag">ECRÃ VERTICAL</span>
     </div>
     <div class="card" id="card-splash">
       <canvas id="pv-splash" width="200" height="120"></canvas>
@@ -132,9 +162,7 @@
       <span class="tag">ECRÃ VERTICAL</span>
     </div>
   </div>
-  <div id="prompt">ESCOLHE O JOGO</div>
-  <div id="hint">Cruzeta escolhe · A/B ou START joga<br>no jogo: SELECT do comando (ou ESC / botão ◄ MENU) volta ao menu</div>
-</div>
+</aside>
 <div id="gstage"></div>
 <button id="backBtn">◄ MENU</button>
 <div id="footer">MWS ARCADE v8 · sete jogos, um ficheiro</div>
@@ -8030,7 +8058,8 @@ requestAnimationFrame(frame);
 <script>
 "use strict";
 /* =================== LAUNCHER =================== */
-const IDS = ['rush', 'runner', 'blocks', 'bubbles', 'splash', 'pinball', 'highway', 'maze'];
+const IDS = ['rush', 'runner', 'bubbles'];
+const EXTRA_IDS = ['blocks', 'splash', 'pinball', 'highway', 'maze'];
 const DIMS = { rush: [540, 960], runner: [960, 540], blocks: [540, 960], bubbles: [960, 540], splash: [540, 960], pinball: [540, 960], highway: [960, 540], maze: [540, 960] };
 let sel = 0;
 let launched = false;
@@ -8039,7 +8068,10 @@ const menuEl = document.getElementById('menu');
 const stage = document.getElementById('gstage');
 const backBtn = document.getElementById('backBtn');
 const footer = document.getElementById('footer');
+const burgerBtn = document.getElementById('burgerBtn');
+const extraMenu = document.getElementById('extraMenu');
 const cards = IDS.map(id => document.getElementById('card-' + id));
+const extraCards = EXTRA_IDS.map(id => document.getElementById('card-' + id));
 
 /* ---------- mini previews pixel-art ---------- */
 function pxOn(c, x, y, w, h, col) { c.fillStyle = col; c.fillRect(x, y, w, h); }
@@ -8212,6 +8244,8 @@ function launch(id) {
   launched = true;
   menuEl.style.display = 'none';
   footer.style.display = 'none';
+  burgerBtn.style.display = 'none';
+  extraMenu.classList.remove('open');
   const cvEl = document.createElement('canvas');
   cvEl.id = 'game';
   cvEl.width = DIMS[id][0];
@@ -8233,9 +8267,19 @@ function backToMenu() { location.reload(); }
 cards.forEach((c, k) => {
   c.addEventListener('click', () => { setSel(k); launch(IDS[sel]); });
 });
+extraCards.forEach((c, k) => {
+  c.addEventListener('click', () => launch(EXTRA_IDS[k]));
+});
+function toggleExtraMenu() {
+  const isOpen = extraMenu.classList.toggle('open');
+  extraMenu.setAttribute('aria-hidden', String(!isOpen));
+  burgerBtn.setAttribute('aria-expanded', String(isOpen));
+}
+burgerBtn.addEventListener('click', toggleExtraMenu);
 backBtn.addEventListener('click', backToMenu);
 window.addEventListener('keydown', e => {
   if (launched) { if (e.key === 'Escape') backToMenu(); return; }
+  if (e.key === 'Escape' && extraMenu.classList.contains('open')) { toggleExtraMenu(); return; }
   if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') setSel(sel - 1);
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setSel(sel + 1);
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') setSel(sel + 1);
