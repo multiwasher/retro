@@ -142,7 +142,7 @@
   </div>
   <div id="prompt">ESCOLHE O JOGO</div>
   <button id="menuBtn">☰  TODOS OS JOGOS</button>
-  <div id="hint">Cruzeta escolhe · A/B joga · botão ☰ mostra todos os jogos<br>voltar ao início: SELECT <b>ou segurar qualquer botão 1 seg</b></div>
+  <div id="hint">Cruzeta escolhe · A/B joga · SELECT mostra todos os jogos<br>no jogo: ESC, SELECT ou segurar qualquer botão 1 seg para voltar</div>
 </div>
 <div id="gstage"></div>
 <button id="backBtn">◄ MENU</button>
@@ -8307,7 +8307,7 @@ function pollPads() {
   if (launched) {
     if (selBtn && !backPrev) backToMenu();
   } else {
-    if (selBtn && !backPrev) applyView('home');   // SELECT -> ecrã principal (4 jogos)
+    if (selBtn && !backPrev) toggleView();   // SELECT -> alterna entre vista home e full (todos os jogos)
     if (dir !== 0) {
       if (dir !== navDirPrev) { setSel(sel + dir); navRepeat = 0.32; }
       else { navRepeat -= dt; if (navRepeat <= 0) { setSel(sel + dir); navRepeat = 0.15; } }
