@@ -142,7 +142,7 @@
   </div>
   <div id="prompt">ESCOLHE O JOGO</div>
   <button id="menuBtn">☰  TODOS OS JOGOS</button>
-  <div id="hint">Cruzeta escolhe · A/B joga · SELECT abre o menu completo<br>no jogo: SELECT do comando (ou botão ◄ MENU) volta</div>
+  <div id="hint">Cruzeta escolhe · A/B joga · botão ☰ mostra todos os jogos<br>voltar ao início: SELECT <b>ou segurar qualquer botão 1 seg</b></div>
 </div>
 <div id="gstage"></div>
 <button id="backBtn">◄ MENU</button>
@@ -8271,19 +8271,22 @@ window.addEventListener('keydown', e => {
 });
 applyView('home');
 let navRepeat = 0, navDirPrev = 0, launchPrev = false, backPrev = false, navLast = performance.now();
+let holdT = 0, holdFired = false;
+window.addEventListener('gamepadconnected', () => {});
 function pollPads() {
   const now = performance.now();
   const dt = Math.min(0.05, (now - navLast) / 1000); navLast = now;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   // agrega o estado de todos os comandos ligados, lido de novo a cada frame
-  let dir = 0, launchBtn = false, selBtn = false;
+  let dir = 0, launchBtn = false, selBtn = false, anyBtn = false;
   for (const p of pads) {
     if (!p) continue;
-    const b = p.buttons.map(x => x.pressed);
+    const b = p.buttons.map(x => x.pressed || x.value > 0.5);
     const ax = p.axes.length > 0 ? p.axes[0] : 0;
     const ay = p.axes.length > 1 ? p.axes[1] : 0;
     if (b[14] || b[12] || ax < -0.5 || ay < -0.5) dir = -1;
     else if (b[15] || b[13] || ax > 0.5 || ay > 0.5) dir = 1;
+    for (let i = 0; i < b.length; i++) if (b[i]) anyBtn = true;
     // A/B (0-3) = jogar; cruzeta (12-15) = navegar; QUALQUER outro botão = menu (SELECT/START, seja qual for o índice)
     for (let i = 0; i < b.length; i++) {
       if (!b[i]) continue;
@@ -8292,6 +8295,15 @@ function pollPads() {
       else selBtn = true;
     }
   }
+  // alternativa universal: SEGURAR qualquer botão ~1.2s volta ao ecrã principal
+  if (anyBtn) {
+    holdT += dt;
+    if (holdT > 1.2 && !holdFired) {
+      holdFired = true;
+      if (launched) backToMenu(); else applyView('home');
+    }
+  } else { holdT = 0; holdFired = false; }
+
   if (launched) {
     if (selBtn && !backPrev) backToMenu();
   } else {
