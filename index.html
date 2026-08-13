@@ -8263,7 +8263,7 @@ backBtn.addEventListener('click', backToMenu);
 if (menuBtn) menuBtn.addEventListener('click', toggleView);
 window.addEventListener('keydown', e => {
   if (launched) { if (e.key === 'Escape') backToMenu(); return; }
-  if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); toggleView(); return; }
+  if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); applyView('home'); return; }
   if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') setSel(sel - 1);
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setSel(sel + 1);
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') setSel(sel + 1);
@@ -8284,13 +8284,18 @@ function pollPads() {
     const ay = p.axes.length > 1 ? p.axes[1] : 0;
     if (b[14] || b[12] || ax < -0.5 || ay < -0.5) dir = -1;
     else if (b[15] || b[13] || ax > 0.5 || ay > 0.5) dir = 1;
-    for (const bi of [0, 1, 2, 3]) if (b[bi]) launchBtn = true;    // A/B = jogar
-    if (b[8] || b[9]) selBtn = true;                              // SELECT/START = menu
+    // A/B (0-3) = jogar; cruzeta (12-15) = navegar; QUALQUER outro botão = menu (SELECT/START, seja qual for o índice)
+    for (let i = 0; i < b.length; i++) {
+      if (!b[i]) continue;
+      if (i >= 12 && i <= 15) continue;
+      if (i <= 3) launchBtn = true;
+      else selBtn = true;
+    }
   }
   if (launched) {
     if (selBtn && !backPrev) backToMenu();
   } else {
-    if (selBtn && !backPrev) toggleView();
+    if (selBtn && !backPrev) applyView('home');   // SELECT -> ecrã principal (4 jogos)
     if (dir !== 0) {
       if (dir !== navDirPrev) { setSel(sel + dir); navRepeat = 0.32; }
       else { navRepeat -= dt; if (navRepeat <= 0) { setSel(sel + dir); navRepeat = 0.15; } }
