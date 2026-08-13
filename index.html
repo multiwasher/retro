@@ -121,7 +121,7 @@
     </div>
   </div>
   <div id="prompt">ESCOLHE O JOGO</div>
-  <div id="hint">◄► escolhe · ✕/ENTER joga<br>no jogo: ESC, SELECT do comando ou botão ◄ MENU para voltar</div>
+  <div id="hint">◄► escolhe · ✕/ENTER joga · SELECT: ver todos<br>no jogo: ESC, SELECT do comando ou botão ◄ MENU para voltar</div>
 </div>
 <aside id="extraMenu" aria-hidden="true">
   <h2>OUTROS JOGOS</h2>
@@ -8305,6 +8305,7 @@ function pollPads() {
   if (launched) {
     if (backBtn && !backPrev) backToMenu();
   } else {
+    if (backBtn && !backPrev) toggleExtraMenu();
     if (dir !== 0) {
       // primeiro toque move logo; depois repete a intervalos enquanto segurado
       if (dir !== navDirPrev) { setSel(sel + dir); navRepeat = 0.32; }
