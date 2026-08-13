@@ -8278,7 +8278,7 @@ function pollPads() {
   const dt = Math.min(0.05, (now - navLast) / 1000); navLast = now;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   // agrega o estado de todos os comandos ligados, lido de novo a cada frame
-  let dir = 0, launchBtn = false, selBtn = false, anyBtn = false;
+  let dir = 0, launchBtn = false, selectBtn = false, startBtn = false, anyBtn = false;
   for (const p of pads) {
     if (!p) continue;
     const b = p.buttons.map(x => x.pressed || x.value > 0.5);
@@ -8287,13 +8287,10 @@ function pollPads() {
     if (b[14] || b[12] || ax < -0.5 || ay < -0.5) dir = -1;
     else if (b[15] || b[13] || ax > 0.5 || ay > 0.5) dir = 1;
     for (let i = 0; i < b.length; i++) if (b[i]) anyBtn = true;
-    // A/B (0-3) = jogar; cruzeta (12-15) = navegar; QUALQUER outro botão = menu (SELECT/START, seja qual for o índice)
-    for (let i = 0; i < b.length; i++) {
-      if (!b[i]) continue;
-      if (i >= 12 && i <= 15) continue;
-      if (i <= 3) launchBtn = true;
-      else selBtn = true;
-    }
+    // A/B (0-3) = jogar; cruzeta (12-15) = navegar; SELECT (8) e START (9) = menu
+    for (const bi of [0, 1, 2, 3]) if (b[bi]) launchBtn = true;
+    if (b[8]) selectBtn = true;  // SELECT específico
+    if (b[9]) startBtn = true;   // START específico
   }
   // alternativa universal: SEGURAR qualquer botão ~1.2s volta ao ecrã principal
   if (anyBtn) {
@@ -8305,9 +8302,9 @@ function pollPads() {
   } else { holdT = 0; holdFired = false; }
 
   if (launched) {
-    if (selBtn && !backPrev) backToMenu();
+    if (selectBtn && !backPrev) backToMenu();
   } else {
-    if (selBtn && !backPrev) toggleView();   // SELECT -> alterna entre vista home e full (todos os jogos)
+    if (selectBtn && !backPrev) toggleView();   // SELECT -> alterna entre vista home e full (todos os jogos)
     if (dir !== 0) {
       if (dir !== navDirPrev) { setSel(sel + dir); navRepeat = 0.32; }
       else { navRepeat -= dt; if (navRepeat <= 0) { setSel(sel + dir); navRepeat = 0.15; } }
@@ -8315,7 +8312,7 @@ function pollPads() {
     navDirPrev = dir;
     if (launchBtn && !launchPrev) launch(navIds[sel]);
   }
-  launchPrev = launchBtn; backPrev = selBtn;
+  launchPrev = launchBtn; backPrev = selectBtn;
   requestAnimationFrame(pollPads);
 }
 requestAnimationFrame(pollPads);
