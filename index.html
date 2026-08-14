@@ -86,6 +86,25 @@
     box-shadow: 0 0 18px rgba(53,214,240,0.4);
   }
   #menuBtn:hover, #menuBtn:active { background: #ffd23f; }
+  #confirmOverlay {
+    position: fixed; inset: 0; z-index: 200; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(5,7,12,0.82);
+  }
+  #confirmBox {
+    background: #0e1526; border: 3px solid #35d6f0; padding: 4vmin 5vmin;
+    text-align: center; box-shadow: 0 0 40px rgba(53,214,240,0.35);
+    font-family: "Courier New", monospace;
+  }
+  #confirmBox h3 { color: #ffd23f; font-size: 3vmin; margin: 0 0 1vmin; letter-spacing: 0.15vmin; }
+  #confirmBox p { color: #d7d7cf; font-size: 1.9vmin; margin: 0 0 3vmin; }
+  #confirmOpts { display: flex; gap: 2.5vmin; justify-content: center; }
+  .confirmOpt {
+    min-width: 22vmin; padding: 2vmin 1.5vmin; cursor: pointer;
+    border: 2px solid #2c3547; background: #10141c; color: #d7d7cf;
+    font-family: inherit; font-weight: bold; font-size: 2vmin; letter-spacing: 0.1vmin;
+  }
+  .confirmOpt.csel { border-color: #35d6f0; background: rgba(53,214,240,0.18); color: #fff; box-shadow: 0 0 16px rgba(53,214,240,0.4); }
 </style>
 </head>
 <body>
@@ -166,11 +185,21 @@
   </div>
   <div id="prompt">ESCOLHE O JOGO</div>
   <button id="menuBtn">☰  TODOS OS JOGOS</button>
-  <div id="hint">Cruzeta escolhe · A/B confirma — cartão <b>☰ TODOS OS JOGOS</b> mostra a coleção<br>durante um jogo: <b>segura o B ~1,5 seg</b> para voltar ao menu (ou SELECT)</div>
+  <div id="hint">Cruzeta escolhe · A/B confirma — cartão <b>☰ TODOS OS JOGOS</b> mostra a coleção<br>durante um jogo: SELECT/START ou <b>abana ▲▼ ▲▼ ▲ rápido</b> abre PAUSA (continuar/menu)</div>
 </div>
 <div id="gstage"></div>
 <button id="backBtn">◄ MENU</button>
-<div id="holdInd"><span id="holdTxt">SEGURA B PARA VOLTAR AO MENU</span><div id="holdBarOuter"><div id="holdBar"></div></div></div>
+<div id="holdInd"><span id="holdTxt">CONTINUA A ABANAR ▲▼ PARA VOLTAR AO MENU</span><div id="holdBarOuter"><div id="holdBar"></div></div></div>
+<div id="confirmOverlay">
+  <div id="confirmBox">
+    <h3>PAUSA</h3>
+    <p>Continuar a jogar ou voltar ao menu principal?</p>
+    <div id="confirmOpts">
+      <div class="confirmOpt" id="opt-continue">▶ CONTINUAR</div>
+      <div class="confirmOpt" id="opt-menu">☰ MENU PRINCIPAL</div>
+    </div>
+  </div>
+</div>
 <div id="footer">MWS ARCADE v8 · sete jogos, um ficheiro</div>
 
 <script>
@@ -8284,12 +8313,11 @@ function setSel(i) {
   if (el) el.scrollIntoView({ block: 'center', inline: 'center' });
 }
 function launch(id) {
-  if (id === 'more') { applyView('full'); holdT = 0; holdFired = true; return; }
-  if (id === 'back') { applyView('home'); holdT = 0; holdFired = true; return; }
+  if (id === 'more') { applyView('full'); wiggleN = 0; wiggleLast = 0; return; }
+  if (id === 'back') { applyView('home'); wiggleN = 0; wiggleLast = 0; return; }
   if (launched) return;
   launched = true;
-  holdT = 0; holdFired = true;      // só conta depois de largar o botão
-  currentGame = id;
+  wiggleN = 0; wiggleLast = 0;       // não herda um abanar a meio de arrancar o jogo
   menuEl.style.display = 'none';
   footer.style.display = 'none';
   const cvEl = document.createElement('canvas');
@@ -8309,7 +8337,8 @@ function launch(id) {
   else BOOT_MAZE();
 }
 function backToMenu() {
-  currentGame = null; holdT = 0; holdFired = true; location.reload(); }
+  location.reload();
+}
 
 cards.forEach((c, k) => {
   c.addEventListener('click', () => { launch(IDS[k]); });
@@ -8328,7 +8357,41 @@ window.addEventListener('keydown', e => {
 });
 applyView('home');
 let navRepeat = 0, navDirPrev = 0, launchPrev = false, backPrev = false, navLast = performance.now();
-let holdT = 0, holdFired = false, currentGame = null;
+let wiggleN = 0, wiggleLast = 0, wiggleT = 0;
+function now2() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+
+/* ---------- popup PAUSA: continuar / menu principal ---------- */
+let confirmOpen = false, confirmSel = 0, confirmDirPrev = 0, confirmT = 0;
+const confirmOverlay = document.getElementById('confirmOverlay');
+const optContinue = document.getElementById('opt-continue');
+const optMenu = document.getElementById('opt-menu');
+function renderConfirmSel() {
+  if (optContinue) optContinue.classList.toggle('csel', confirmSel === 0);
+  if (optMenu) optMenu.classList.toggle('csel', confirmSel === 1);
+}
+function openConfirm(defaultSel) {
+  if (!launched) return;             // só faz sentido a meio de um jogo
+  confirmOpen = true; confirmSel = defaultSel; confirmT = 0;
+  renderConfirmSel();
+  if (confirmOverlay) confirmOverlay.style.display = 'flex';
+  if (holdInd) holdInd.style.display = 'none';
+}
+function closeConfirm(action) {
+  confirmOpen = false;
+  if (confirmOverlay) confirmOverlay.style.display = 'none';
+  if (action === 'menu') backToMenu();
+}
+if (optContinue) optContinue.addEventListener('click', () => closeConfirm('continue'));
+if (optMenu) optMenu.addEventListener('click', () => closeConfirm('menu'));
+// bloqueia o jogo de reagir a teclas enquanto o popup está aberto (fase de captura corre antes)
+window.addEventListener('keydown', e => {
+  if (!confirmOpen) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') confirmSel = confirmSel === 0 ? 1 : 0;
+  else if (e.key === 'Escape') { closeConfirm('continue'); return; }
+  else if (e.key === 'Enter' || e.key === ' ') { closeConfirm(confirmSel === 0 ? 'continue' : 'menu'); return; }
+  renderConfirmSel();
+}, true);
 const holdInd = document.getElementById('holdInd');
 const holdBar = document.getElementById('holdBar');
 const holdTxt = document.getElementById('holdTxt');
@@ -8338,23 +8401,19 @@ function pollPads() {
   const dt = Math.min(0.05, (now - navLast) / 1000); navLast = now;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   // agrega o estado de todos os comandos ligados, lido de novo a cada frame
-  let dir = 0, launchBtn = false, selBtn = false, anyBtn = false, holdBtn = false;
+  let dir = 0, launchBtn = false, selBtn = false, vert = 0;
   for (const p of pads) {
     if (!p) continue;
     const b = p.buttons.map(x => x.pressed || x.value > 0.5);
     const ax = p.axes.length > 0 ? p.axes[0] : 0;
     const ay = p.axes.length > 1 ? p.axes[1] : 0;
-    if (b[14] || b[12] || ax < -0.5 || ay < -0.5) dir = -1;
-    else if (b[15] || b[13] || ax > 0.5 || ay > 0.5) dir = 1;
-    let nFace = 0;
-    for (let i = 0; i < b.length; i++) {
-      if (!b[i]) continue;
-      anyBtn = true;
-      if (i <= 3) nFace++;
-    }
-    // no Pinball segurar um flipper é jogar: aí exige-se A+B juntos
-    holdBtn = (currentGame === 'pinball') ? (nFace >= 2) : anyBtn;
-    // A/B (0-3) = jogar; cruzeta (12-15) = navegar; QUALQUER outro botão = menu (SELECT/START, seja qual for o índice)
+    const u = b[12] || ay < -0.5, d = b[13] || ay > 0.5;
+    if (u && !d) vert = -1; else if (d && !u) vert = 1;
+    if (b[14] || ax < -0.5) dir = -1;
+    else if (b[15] || ax > 0.5) dir = 1;
+    else if (u) dir = -1;
+    else if (d) dir = 1;
+    // A/B (0-3) = jogar; cruzeta (12-15) = navegar; QUALQUER outro botão = SELECT/START (seja qual for o índice, tentamos apanhar na mesma)
     for (let i = 0; i < b.length; i++) {
       if (!b[i]) continue;
       if (i >= 12 && i <= 15) continue;
@@ -8362,28 +8421,41 @@ function pollPads() {
       else selBtn = true;
     }
   }
-  // SEGURAR o botão B (ou qualquer botão de ação) ~1.5s volta ao menu principal
-  // — funciona em TVs cujo navegador intercepta o SELECT
-  const HOLD_SEC = 1.5;
-  if (holdBtn) {
-    holdT += dt;
-    if (holdInd && holdT > 0.3) {
-      if (holdTxt) holdTxt.textContent = (currentGame === 'pinball') ? 'SEGURA A+B PARA VOLTAR AO MENU' : 'SEGURA B PARA VOLTAR AO MENU';
+  // popup PAUSA aberto: cruzeta escolhe, A/B confirma — ignora tudo o resto enquanto está aberto
+  if (confirmOpen) {
+    if (dir !== 0 && dir !== confirmDirPrev) { confirmSel = confirmSel === 0 ? 1 : 0; renderConfirmSel(); }
+    confirmDirPrev = dir;
+    if (launchBtn && !launchPrev) closeConfirm(confirmSel === 0 ? 'continue' : 'menu');
+    launchPrev = launchBtn; backPrev = selBtn;
+    requestAnimationFrame(pollPads);
+    return;
+  }
+
+  // rede de segurança universal para TVs que bloqueiam SELECT/START (a cruz mecânica só dá uma
+  // direção de cada vez, por isso o gesto é ABANAR cima/baixo alternado, rápido, várias vezes seguidas —
+  // nenhum jogo faz isto naturalmente durante o jogo normal)
+  const WIGGLE_N = 5, WIGGLE_MAXGAP = 0.45, WIGGLE_IDLE = 0.7;
+  if (vert !== 0 && vert !== wiggleLast) {
+    if (wiggleLast !== 0 && (now2() - wiggleT) < WIGGLE_MAXGAP * 1000) wiggleN++;
+    else wiggleN = 1;
+    wiggleLast = vert; wiggleT = now2();
+    if (holdInd && wiggleN > 1) {
+      if (holdTxt) holdTxt.textContent = 'CONTINUA A ABANAR ▲▼ PARA VOLTAR AO MENU';
       holdInd.style.display = 'block';
-      if (holdBar) holdBar.style.width = Math.min(100, (holdT / HOLD_SEC) * 100) + '%';
+      if (holdBar) holdBar.style.width = Math.min(100, (wiggleN / WIGGLE_N) * 100) + '%';
     }
-    if (holdT > HOLD_SEC && !holdFired) {
-      holdFired = true;
+    if (wiggleN >= WIGGLE_N) {
+      wiggleN = 0; wiggleLast = 0;
       if (holdInd) holdInd.style.display = 'none';
-      if (launched) backToMenu(); else applyView('home');
+      if (launched) openConfirm(1); else applyView('home');   // gesto deliberado -> "MENU" pré-selecionado
     }
-  } else {
-    holdT = 0; holdFired = false;
+  } else if ((now2() - wiggleT) > WIGGLE_IDLE * 1000 && wiggleN > 0) {
+    wiggleN = 0; wiggleLast = 0;
     if (holdInd) holdInd.style.display = 'none';
   }
 
   if (launched) {
-    if (selBtn && !backPrev) backToMenu();
+    if (selBtn && !backPrev) openConfirm(0);   // SELECT/START -> popup, "CONTINUAR" pré-selecionado
   } else {
     if (selBtn && !backPrev) applyView('home');   // SELECT -> ecrã principal (4 jogos)
     if (dir !== 0) {
